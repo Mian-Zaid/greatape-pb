@@ -16,6 +16,7 @@ import (
 
 type VerifyOTPRequest struct {
 	OTP string `json:"otp" validate:"required"`
+	EMAIL string `json:"email" validate:"required"`
 }
 
 type UserRecord struct {
@@ -49,12 +50,21 @@ func main() {
 				return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request"})
 			}
 	
-			// Log the received OTP
-			log.Println("Got OTP for Verification:", req.OTP)
-	
-			// Further processing (e.g., OTP verification) can be done here
-	
-			return c.JSON(http.StatusOK, map[string]string{"message": "OTP received"})
+			// Retrieve the user record by email
+            userRecord, err := app.Dao().FindFirstRecordByData("users", "email", req.EMAIL)
+            if err != nil {
+                return c.JSON(http.StatusOK, map[string]string{"message": "","error": "User not found","code": "202"})
+            }
+
+            // Compare the received OTP with the stored OTP
+            storedOTP := userRecord.GetString("otp")
+            if storedOTP != req.OTP {
+                return c.JSON(http.StatusOK, map[string]string{"message": "","error": "Invalid OTP","code": "201"})
+            }
+
+            // OTP verified successfully
+            return c.JSON(http.StatusOK, map[string]string{"message": "OTP verified successfully", "code": "200"})
+       
 		}, /* optional middlewares */)
 	
 		return nil
