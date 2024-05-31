@@ -8,11 +8,33 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/mailer"
+	"fmt"
+    "math/rand"
+    "time"
 	// "github.com/pocketbase/pocketbase/tools/template"
 )
 
 type VerifyOTPRequest struct {
 	OTP string `json:"otp" validate:"required"`
+}
+
+type UserRecord struct {
+    Id        string                 `json:"id"`
+    Created   string                 `json:"created"`
+    Updated   string                 `json:"updated"`
+    CollectionId string              `json:"collectionId"`
+    Data      map[string]interface{} `json:"data"`
+}
+
+func generateOTP() string {
+    // Seed the random number generator to ensure different results each time
+    rand.Seed(time.Now().UnixNano())
+
+    // Generate a random number between 100000 and 999999
+    otp := rand.Intn(900000) + 100000
+
+    // Convert the OTP to a string
+    return fmt.Sprintf("%06d", otp)
 }
 
 func main() {
@@ -42,30 +64,133 @@ func main() {
 	app.OnRecordAfterCreateRequest("users").Add(func(e *core.RecordCreateEvent) error {
 		log.Println("Record: ",e.Record)
 
+		log.Println("Id: ",e.Record.Id)
+		log.Println("Username: ",e.Record.Username())
+		log.Println("Email: ",e.Record.Email())
+		log.Println("Created: ",e.Record.Created)
+		log.Println("Updated: ",e.Record.Updated)
+		
+
 		// You can check the record here, generate some OTP, save
 		// it to users collection or your custom collection. Send the
 		// email programmatically here and ...
 
-		otp := "123456" // Generate this however you wish
+		otp := generateOTP() 
 
-		// You might need to save some states or flags to database too.
-		// You can create a custom collection programmatically, via UI or
-		// even extend the users collection itself as you see fit.
-		// Check here: https://pocketbase.io/docs/go-database/
-
-		// Send the email
-		// message := &mailer.Message{
-		// 	From: mail.Address{
-		// 		Address: app.Settings().Meta.SenderAddress,
-		// 		Name:    app.Settings().Meta.SenderName,
-		// 	},
-		// 	To:      []mail.Address{{Address: e.Record.Email()}},
-		// 	Subject: "OTP for Login to GreatApe",
-		// 	HTML:    "Hello welcome to Greatape, here's your One time Password to login " + otp,
-		// 	// bcc, cc, attachments and custom headers are also supported...
-		// }
+		// Update the user record with the OTP
+		e.Record.Set("otp", otp)
+		err := app.Dao().SaveRecord(e.Record)
+		if err != nil {
+			log.Println("Error updating record:", err)
+			return err
+		}
 
 		// Send the email
+		message := &mailer.Message{
+			From: mail.Address{
+				Address: app.Settings().Meta.SenderAddress,
+				Name:    app.Settings().Meta.SenderName,
+			},
+			To:      []mail.Address{{Address: e.Record.Email()}},
+			Subject: "OTP for Signup to GreatApe",
+			HTML: `
+				<!DOCTYPE html>
+				<html lang="en">
+				<head>
+					<meta charset="UTF-8">
+					<meta name="viewport" content="width=device-width, initial-scale=1.0">
+					<title>OTP for Login</title>
+					<style>
+						body {
+							font-family: Arial, sans-serif;
+							background-color: #f4f4f4;
+							margin: 0;
+							padding: 0;
+						}
+						.container {
+							width: 100%;
+							max-width: 600px;
+							margin: 0 auto;
+							background-color: #ffffff;
+							padding: 20px;
+							box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+						}
+						.header {
+							text-align: center;
+							padding: 10px 0;
+						}
+						.header img {
+							width: 150px;
+						}
+						.content {
+							padding: 20px;
+							text-align: center;
+						}
+						.content h1 {
+							color: #333333;
+						}
+						.content p {
+							color: #666666;
+							line-height: 1.5;
+						}
+						.otp {
+							display: inline-block;
+							padding: 10px 20px;
+							font-size: 18px;
+							color: #000000;
+							background-color: #ffcc00;
+							border-radius: 5px;
+							margin-top: 20px;
+							text-decoration: none;
+						}
+						.footer {
+							text-align: center;
+							padding: 10px;
+							font-size: 12px;
+							color: #999999;
+						}
+					</style>
+				</head>
+				<body>
+					<div class="container">
+					
+						<div class="content">
+							<h1>Welcome to GreatApe</h1>
+							<p>Hello, welcome to GreatApe. Here is your One-Time Password (OTP) to signup:</p>
+							<div class="otp">` + otp + `</div>
+						</div>
+						
+					</div>
+				</body>
+				</html>
+			`,
+			// bcc, cc, attachments and custom headers are also supported...
+		}
+
+		// log.Println("Message: ",message)
+
+		return app.NewMailClient().Send(message)
+	})
+
+	//fires only for "users" collections
+	app.OnRecordAuthRequest("users").Add(func(e *core.RecordAuthEvent) error {
+		log.Println("New Login Request")
+        log.Println(e.HttpContext)
+        log.Println(e.Record)
+        log.Println(e.Token)
+        log.Println(e.Meta)
+
+		otp := generateOTP() 
+
+		// Update the user record with the OTP
+		e.Record.Set("otp", otp)
+		err := app.Dao().SaveRecord(e.Record)
+		if err != nil {
+			log.Println("Error updating record:", err)
+			return err
+		}
+
+        // Send the email
 		message := &mailer.Message{
 			From: mail.Address{
 				Address: app.Settings().Meta.SenderAddress,
@@ -147,11 +272,10 @@ func main() {
 			// bcc, cc, attachments and custom headers are also supported...
 		}
 
-
-		log.Println("Message: ",message)
+		// log.Println("Message: ",message)
 
 		return app.NewMailClient().Send(message)
-	})
+    })
 
 	app.OnMailerBeforeRecordVerificationSend().Add(func(e *core.MailerRecordEvent) error {
         log.Println(e.MailClient)
