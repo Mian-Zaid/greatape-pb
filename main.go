@@ -11,7 +11,6 @@ import (
 	"fmt"
     "math/rand"
     "time"
-	// "github.com/pocketbase/pocketbase/tools/template"
 )
 
 type VerifyOTPRequest struct {
@@ -72,18 +71,6 @@ func main() {
 
 	// fires only for "users" collections
 	app.OnRecordAfterCreateRequest("users").Add(func(e *core.RecordCreateEvent) error {
-		log.Println("Record: ",e.Record)
-
-		log.Println("Id: ",e.Record.Id)
-		log.Println("Username: ",e.Record.Username())
-		log.Println("Email: ",e.Record.Email())
-		log.Println("Created: ",e.Record.Created)
-		log.Println("Updated: ",e.Record.Updated)
-		
-
-		// You can check the record here, generate some OTP, save
-		// it to users collection or your custom collection. Send the
-		// email programmatically here and ...
 
 		otp := generateOTP() 
 
@@ -177,18 +164,11 @@ func main() {
 			// bcc, cc, attachments and custom headers are also supported...
 		}
 
-		// log.Println("Message: ",message)
-
 		return app.NewMailClient().Send(message)
 	})
 
 	//fires only for "users" collections
 	app.OnRecordAuthRequest("users").Add(func(e *core.RecordAuthEvent) error {
-		log.Println("New Login Request")
-        log.Println(e.HttpContext)
-        log.Println(e.Record)
-        log.Println(e.Token)
-        log.Println(e.Meta)
 
 		otp := generateOTP() 
 
@@ -282,23 +262,8 @@ func main() {
 			// bcc, cc, attachments and custom headers are also supported...
 		}
 
-		// log.Println("Message: ",message)
-
 		return app.NewMailClient().Send(message)
     })
-
-	app.OnMailerBeforeRecordVerificationSend().Add(func(e *core.MailerRecordEvent) error {
-        log.Println(e.MailClient)
-        log.Println(e.Message)
-        log.Println(e.Record)
-        log.Println(e.Meta)
-
-        // change the mail subject
-        e.Message.Subject = "new subject"
-
-        return nil
-    })
-
 
 	if err := app.Start(); err != nil {
 		log.Fatal(err)
